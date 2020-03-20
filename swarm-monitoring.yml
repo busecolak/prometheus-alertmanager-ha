@@ -1,0 +1,185 @@
+version: "3.8"
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+  minio_data:
+  thanos_data:
+
+configs:
+  alertmanager.yml:
+    file: ./prometheus/config/alertmanager.yml
+  bucket_config.yml:
+    file: ./prometheus/config/bucket_config.yml
+  alert_rules.yml:
+    file: ./prometheus/config/alert_rules.yml
+  prometheus.yaml:
+    file: ./grafana/config/prometheus.yaml
+  nginx.json:
+    file: ./grafana/config/nginx.json
+  dashboards.yml:
+    file: ./grafana/config/dashboards.yml
+
+networks:
+  internal:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    attachable: true
+
+services:
+  prometheus1:
+    image: prometheus:latest
+    networks:
+      - internal
+    configs:
+      - source: alert_rules.yml
+        target: /etc/prometheus/alert_rules.yml
+    environment:
+      REPLICA_ID: 1
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--log.level=debug"
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+        reservations:
+          memory: 128M
+
+  prometheus2:
+    image: prometheus:latest
+    networks:
+      - internal
+    configs:
+      - source: alert_rules.yml
+        target: /etc/prometheus/alert_rules.yml
+    environment:
+      REPLICA_ID: 2
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--log.level=debug"
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+        reservations:
+          memory: 128M
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    networks:
+      - internal
+    volumes:
+      - alertmanager_data:/alertmanager
+    ports:
+      - 9093:9093
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--cluster.listen-address=0.0.0.0:9094"
+      - "--cluster.advertise-address=:9094"
+      - "--cluster.peer=alertmanager:9094"
+      - "--log.level=debug"
+    configs:
+      - source: alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  router:
+    image: "router:latest"
+    environment:
+      MONITORING: "true"
+    networks:
+      - internal
+    ports:
+      - published: 80
+        target: 80
+      - published: 9913
+        target: 9913
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  grafana:
+    image: grafana/grafana:6.5.1
+    configs:
+      - source: prometheus.yaml
+        target: /etc/grafana/provisioning/datasources/prometheus.yaml
+      - source: dashboards.yml
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
+      - source: nginx.json
+        target: /etc/grafana/dashboards/nginx.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - 3000:3000
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  thanos_sidecar1:
+    image: improbable/thanos:v0.3.2
+    command: "sidecar --prometheus.url=http://prometheus1:9090 --tsdb.path=/prometheus --grpc-address=0.0.0.0:10901 --http-address=0.0.0.0:19191"
+    networks:
+      - internal
+    volumes:
+      - prometheus_data:/prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  thanos_sidecar2:
+    image: improbable/thanos:v0.3.2
+    command: "sidecar --prometheus.url=http://prometheus2:9090 --tsdb.path=/prometheus --grpc-address=0.0.0.0:10901 --http-address=0.0.0.0:19191"
+    networks:
+      - internal
+    volumes:
+      - prometheus_data:/prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  thanos_query:
+    image: improbable/thanos:v0.3.2
+    command: "query --http-address 0.0.0.0:19192 --store thanos_sidecar1:10901 --store thanos_sidecar2:10901 --query.replica-label replica"
+    networks:
+      - internal
+    ports:
+      - published: 19192
+        target: 19192
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
