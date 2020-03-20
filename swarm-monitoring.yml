@@ -10,8 +10,6 @@ volumes:
 configs:
   alertmanager.yml:
     file: ./prometheus/config/alertmanager.yml
-  bucket_config.yml:
-    file: ./prometheus/config/bucket_config.yml
   alert_rules.yml:
     file: ./prometheus/config/alert_rules.yml
   prometheus.yaml:
