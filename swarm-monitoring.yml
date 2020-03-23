@@ -89,6 +89,7 @@ services:
       - source: alertmanager.yml
         target: /etc/alertmanager/alertmanager.yml
     deploy:
+      mode: global
       resources:
         limits:
           memory: 128M
