@@ -26,7 +26,8 @@ scrape_configs:
 alerting:
   alert_relabel_configs:
     - source_labels: ['replica']
-      action: labeldrop
+      #action: labeldrop
+      replacement: ""
   alertmanagers:
     - dns_sd_configs:
       - names:
