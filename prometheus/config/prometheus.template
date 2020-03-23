@@ -27,6 +27,7 @@ alerting:
   alert_relabel_configs:
     - source_labels: ['replica']
       replacement: ""
+      target_label: replica
   alertmanagers:
     - dns_sd_configs:
       - names:
