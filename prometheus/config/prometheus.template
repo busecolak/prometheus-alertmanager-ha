@@ -24,6 +24,9 @@ scrape_configs:
       port: 9913
 
 alerting:
+  alert_relabel_configs:
+    - source_labels: [replica]
+      action: drop
   alertmanagers:
     - dns_sd_configs:
       - names:
