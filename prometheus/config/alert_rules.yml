@@ -1,8 +1,10 @@
 groups:
   - name: targets
     rules:
+      - record: operation_hours
+        expr: hour() > 5 and hour() < 17 
       - alert: monitor_service_down
-        expr: up == 0
+        expr: up == 0 and ON() operation_hours
         labels:
           severity: critical
         annotations:
